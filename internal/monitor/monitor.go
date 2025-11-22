@@ -213,11 +213,7 @@ func (m *Monitor) primeCache(ctx context.Context) error {
 
 	subject := m.subscribeSubject()
 	m.logger.Info("priming cache from stream", "stream", m.cfg.PrimeStream, "subject", subject)
-	sub, err := js.Subscribe(subject,
-		func(msg *nats.Msg) {
-			m.handleMessage(ctx, msg)
-			_ = msg.Ack()
-		},
+	sub, err := js.SubscribeSync(subject,
 		nats.BindStream(m.cfg.PrimeStream),
 		nats.ManualAck(),
 		nats.DeliverLastPerSubject(),
@@ -231,13 +227,15 @@ func (m *Monitor) primeCache(ctx context.Context) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	for {
-		_, err := sub.NextMsgWithContext(timeoutCtx)
+		msg, err := sub.NextMsgWithContext(timeoutCtx)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return nil
 			}
 			return err
 		}
+		m.handleMessage(ctx, msg)
+		_ = msg.Ack()
 	}
 }
 

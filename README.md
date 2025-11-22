@@ -61,7 +61,7 @@ Behavior:
 If a service is retired and you use JetStream priming, remove its last-seen message from the stream so it stops alerting. With the NATS CLI:
 
 ```sh
-nats stream purge HEARTBEATS --filter heartbeat.retired-service --force
+nats stream purge HEARTBEATS --subject heartbeat.retired-service --force
 ```
 
 Replace `HEARTBEATS` with your stream name and `heartbeat.retired-service` with the subject to clear.
