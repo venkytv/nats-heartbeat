@@ -1,2 +1,98 @@
 # nats-heartbeat
-NATS-based heartbeat monitor that tracks missed beats and triggers alerts.
+
+Lightweight NATS-driven liveness agent and monitor. Agents publish heartbeats (with expected interval and optional thresholds); the monitor consumes them, detects consecutive misses or elapsed grace windows, and sends alerts (default: Pushover) plus a resolved notice when beats resume. A reusable library lets other Go binaries emit heartbeats directly.
+
+## Prereqs
+- Go 1.21+
+- NATS server reachable by the agent/monitor
+- Pushover credentials for notifications (or swap in another notifier)
+
+## Agent (CLI)
+Publishes periodic heartbeats on a full subject you choose (e.g., `heartbeat.my-service`).
+
+```sh
+go run ./cmd/agent \
+  -nats-url nats://localhost:4222 \
+  -subject heartbeat.service.api \
+  -interval 15s \
+  -skippable 0 \
+  -grace 0 \
+  -description "API service"
+```
+
+Flags (env mirrors in parentheses):
+- `-nats-url` (`NATS_URL`): NATS server URL.
+- `-subject` (`SUBJECT`): required full subject per service (recommend a `heartbeat.*` namespace).
+- `-interval` (`INTERVAL`): heartbeat period (e.g., `15s`).
+- `-skippable` (`SKIPPABLE`): beats allowed to miss before alerting; omit/0 to disable count threshold.
+- `-grace` (`GRACE`): duration allowed with no beats; omit/0 to disable duration threshold.
+- `-description` (`DESCRIPTION`): human-friendly label (falls back to subject).
+
+## Monitor (CLI)
+Watches a subject prefix, evaluates miss thresholds, and notifies when breached or resolved.
+
+```sh
+go run ./cmd/monitor \
+  -nats-url nats://localhost:4222 \
+  -subject-prefix heartbeat. \
+  -prime-stream HEARTBEATS \
+  -poll 1s \
+  -repeat-every 12h \
+  -pushover-user "$PUSHOVER_USER" \
+  -pushover-token "$PUSHOVER_TOKEN"
+```
+
+Flags (env mirrors in parentheses):
+- `-nats-url` (`NATS_URL`): NATS server URL.
+- `-subject-prefix` (`SUBJECT_PREFIX`, default `heartbeat.`): prefix to subscribe to.
+- `-prime-stream` (`PRIME_STREAM`): optional JetStream stream name to seed last-seen messages once on startup (uses deliver-last-per-subject).
+- `-poll` (`POLL_INTERVAL`): scan cadence for missed beats.
+- `-repeat-every` (`REPEAT_EVERY`, default `12h`): how often to repeat alerts while a heartbeat remains missing.
+- `-pushover-user` (`PUSHOVER_USER`), `-pushover-token` (`PUSHOVER_TOKEN`): Pushover credentials.
+
+Behavior:
+- Uses the earlier of skippable-count or grace-duration to trigger alerts.
+- Caches last-seen per subject in memory.
+- Sends a resolved notification when heartbeats resume.
+- Repeats alerts at the configured interval while a heartbeat is still missing.
+- Notifier interface is pluggable; Pushover is the default implementation.
+
+### Clearing obsolete heartbeats when using cache priming
+If a service is retired and you use JetStream priming, remove its last-seen message from the stream so it stops alerting. With the NATS CLI:
+
+```sh
+nats stream purge HEARTBEATS --filter heartbeat.retired-service --force
+```
+
+Replace `HEARTBEATS` with your stream name and `heartbeat.retired-service` with the subject to clear.
+
+## Library Usage (publish heartbeats)
+Embed heartbeat publishing in your own Go binaries:
+
+```go
+package main
+
+import (
+	"context"
+	"time"
+
+	"github.com/nats-io/nats.go"
+	"github.com/venkytv/nats-heartbeat/pkg/heartbeat"
+)
+
+func main() {
+	nc, _ := nats.Connect(nats.DefaultURL)
+	pub := heartbeat.NewPublisher(nc, "heartbeat.")
+
+	msg := heartbeat.Message{
+		Subject:     "heartbeat.service.api",
+		GeneratedAt: time.Now().UTC(),
+		Interval:    15 * time.Second,
+		Description: "API service",
+		// Optional thresholds:
+		// Skippable: func(i int) *int { return &i }(2),
+		// GracePeriod: func(d time.Duration) *time.Duration { return &d }(45 * time.Second),
+	}
+	_ = pub.Publish(context.Background(), msg)
+}
+```
