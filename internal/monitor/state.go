@@ -11,7 +11,6 @@ type state struct {
 	description string
 	lastSeen    time.Time
 	interval    time.Duration
-	skippable   *int
 	grace       *time.Duration
 	alertActive bool
 	missCount   int
@@ -24,22 +23,15 @@ func newState(msg heartbeat.Message) state {
 		description: descriptionOrSubject(msg),
 		lastSeen:    msg.GeneratedAt,
 		interval:    msg.Interval,
-		skippable:   msg.Skippable,
 		grace:       msg.GracePeriod,
 	}
 }
 
 func (s state) allowedWindow() time.Duration {
-	allowed := s.interval
-	if s.skippable != nil {
-		allowed = s.interval * time.Duration(*s.skippable+1)
-	}
 	if s.grace != nil && *s.grace > 0 {
-		if allowed <= 0 || *s.grace < allowed {
-			allowed = *s.grace
-		}
+		return *s.grace
 	}
-	return allowed
+	return s.interval
 }
 
 func descriptionOrSubject(msg heartbeat.Message) string {

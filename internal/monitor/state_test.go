@@ -7,19 +7,16 @@ import (
 	"github.com/venkytv/nats-heartbeat/pkg/heartbeat"
 )
 
-func TestAllowedWindowPrefersSmallest(t *testing.T) {
-	skips := 2
+func TestAllowedWindowUsesGraceWhenSet(t *testing.T) {
 	grace := 5 * time.Second
 	st := newState(heartbeat.Message{
 		Subject:     "svc",
 		GeneratedAt: time.Now(),
 		Interval:    3 * time.Second,
-		Skippable:   &skips,
 		GracePeriod: &grace,
 	})
-	// Skips would allow 9s, grace is 5s; expect 5s window.
 	if got := st.allowedWindow(); got != grace {
-		t.Fatalf("expected %s, got %s", grace, got)
+		t.Fatalf("expected grace %s, got %s", grace, got)
 	}
 }
 

@@ -12,7 +12,6 @@ type Message struct {
 	Subject     string         `json:"subject"`
 	GeneratedAt time.Time      `json:"generated_at"`
 	Interval    time.Duration  `json:"interval"`               // expected heartbeat period
-	Skippable   *int           `json:"skippable,omitempty"`    // number of beats allowed to miss
 	GracePeriod *time.Duration `json:"grace_period,omitempty"` // max time to miss beats
 	Description string         `json:"description,omitempty"`
 }
@@ -44,9 +43,6 @@ func (m Message) Validate() error {
 	}
 	if m.Interval <= 0 {
 		return fmt.Errorf("interval must be >0, got %s", m.Interval)
-	}
-	if m.Skippable != nil && *m.Skippable < 0 {
-		return errors.New("skippable cannot be negative")
 	}
 	if m.GracePeriod != nil && *m.GracePeriod < 0 {
 		return errors.New("grace period cannot be negative")

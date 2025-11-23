@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -18,13 +17,12 @@ import (
 
 func main() {
 	var (
-		natsURL   = flag.String("nats-url", envDefault("NATS_URL", nats.DefaultURL), "NATS server URL")
-		subject   = flag.String("subject", envDefault("SUBJECT", ""), "Full heartbeat subject (required)")
-		interval  = flag.Duration("interval", envDuration("INTERVAL", 15*time.Second), "Heartbeat interval")
-		skippable = flag.Int("skippable", envInt("SKIPPABLE", 0), "Number of beats that may be missed before alerting")
-		grace     = flag.Duration("grace", envDuration("GRACE", 0), "Optional max duration to miss beats before alerting")
-		desc      = flag.String("description", envDefault("DESCRIPTION", ""), "Human-friendly description for alerts")
-		debug     = flag.Bool("debug", envBool("DEBUG", false), "Enable debug logging")
+		natsURL  = flag.String("nats-url", envDefault("NATS_URL", nats.DefaultURL), "NATS server URL")
+		subject  = flag.String("subject", envDefault("SUBJECT", ""), "Full heartbeat subject (required)")
+		interval = flag.Duration("interval", envDuration("INTERVAL", 15*time.Second), "Heartbeat interval")
+		grace    = flag.Duration("grace", envDuration("GRACE", 0), "Optional max duration to miss beats before alerting")
+		desc     = flag.String("description", envDefault("DESCRIPTION", ""), "Human-friendly description for alerts")
+		debug    = flag.Bool("debug", envBool("DEBUG", false), "Enable debug logging")
 	)
 	flag.Parse()
 
@@ -63,9 +61,6 @@ func main() {
 			Interval:    *interval,
 			Description: *desc,
 		}
-		if skippable != nil && *skippable > 0 {
-			hb.Skippable = skippable
-		}
 		if grace != nil && *grace > 0 {
 			hb.GracePeriod = grace
 		}
@@ -73,7 +68,7 @@ func main() {
 		if err := pub.Publish(ctx, hb); err != nil {
 			logger.Error("publish heartbeat failed", "err", err, "subject", hb.Subject)
 		} else {
-			logger.Debug("heartbeat published", "subject", hb.Subject, "interval", hb.Interval, "skippable", hb.Skippable, "grace", hb.GracePeriod)
+			logger.Debug("heartbeat published", "subject", hb.Subject, "interval", hb.Interval, "grace", hb.GracePeriod)
 		}
 
 		select {
@@ -101,16 +96,6 @@ func envBool(key string, fallback bool) bool {
 func envDuration(key string, fallback time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
 		if parsed, err := time.ParseDuration(v); err == nil {
-			return parsed
-		}
-	}
-	return fallback
-}
-
-func envInt(key string, fallback int) int {
-	if v := os.Getenv(key); v != "" {
-		var parsed int
-		if _, err := fmt.Sscanf(v, "%d", &parsed); err == nil {
 			return parsed
 		}
 	}

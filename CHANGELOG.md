@@ -3,7 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## Unreleased
-- Add changelog and documentation updates.
+
+## v0.2.0
+- BREAKING: remove skippable-count threshold; grace duration now defines the miss window (falls back to interval when unset).
+- Update agent/monitor docs to reflect grace-only behavior.
 
 ## v0.1.0
 - Introduce Go module `github.com/venkytv/nats-heartbeat`.

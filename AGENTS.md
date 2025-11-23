@@ -6,8 +6,8 @@
 - Sample env/configs go in `configs/` (e.g., `configs/sample.env`); `.env` is ignored.
 
 ## Architecture Overview
-- Library publishes heartbeats (identity, generated time, expected interval) on NATS subjects under a prefix; optional skippable count, grace duration, description (fallback: subject).
-- Monitor subscribes to that prefix, caches last-seen per subject, triggers on whichever comes first (count or duration breach), and emits resolved notices when beats resume.
+- Library publishes heartbeats (identity, generated time, expected interval) on NATS subjects under a prefix; optional grace duration and description (fallback: subject).
+- Monitor subscribes to that prefix, caches last-seen per subject, triggers when the grace (or interval when grace is unset) is breached, and emits resolved notices when beats resume.
 - Optional: prime the cache at startup from a NATS stream of latest messages. Notifier interface is pluggable; default channel is Pushover.
 
 ## Build, Test, and Development Commands

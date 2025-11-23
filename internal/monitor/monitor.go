@@ -113,16 +113,15 @@ func (m *Monitor) handleMessage(ctx context.Context, msg *nats.Msg) {
 	if !ok {
 		newState := newState(hb)
 		m.state[hb.Subject] = &newState
-		m.logger.Debug("new heartbeat subject added", "subject", hb.Subject, "interval", hb.Interval, "skippable", hb.Skippable, "grace", hb.GracePeriod)
+		m.logger.Debug("new heartbeat subject added", "subject", hb.Subject, "interval", hb.Interval, "grace", hb.GracePeriod)
 		return
 	}
 
 	s.lastSeen = hb.GeneratedAt
 	s.interval = hb.Interval
-	s.skippable = hb.Skippable
 	s.grace = hb.GracePeriod
 	s.description = descriptionOrSubject(hb)
-	m.logger.Debug("heartbeat updated", "subject", hb.Subject, "interval", hb.Interval, "skippable", hb.Skippable, "grace", hb.GracePeriod)
+	m.logger.Debug("heartbeat updated", "subject", hb.Subject, "interval", hb.Interval, "grace", hb.GracePeriod)
 
 	if s.alertActive {
 		s.alertActive = false

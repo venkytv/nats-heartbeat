@@ -15,7 +15,6 @@ go run ./cmd/agent \
   -nats-url nats://localhost:4222 \
   -subject heartbeat.service.api \
   -interval 15s \
-  -skippable 0 \
   -grace 0 \
   -description "API service"
 ```
@@ -24,8 +23,7 @@ Flags (env mirrors in parentheses):
 - `-nats-url` (`NATS_URL`): NATS server URL.
 - `-subject` (`SUBJECT`): required full subject per service (recommend a `heartbeat.*` namespace).
 - `-interval` (`INTERVAL`): heartbeat period (e.g., `15s`).
-- `-skippable` (`SKIPPABLE`): beats allowed to miss before alerting; omit/0 to disable count threshold.
-- `-grace` (`GRACE`): duration allowed with no beats; omit/0 to disable duration threshold.
+- `-grace` (`GRACE`): duration allowed with no beats; omit/0 to fall back to interval.
 - `-description` (`DESCRIPTION`): human-friendly label (falls back to subject).
 
 ## Monitor (CLI)
@@ -51,7 +49,7 @@ Flags (env mirrors in parentheses):
 - `-pushover-user` (`PUSHOVER_USER`), `-pushover-token` (`PUSHOVER_TOKEN`): Pushover credentials.
 
 Behavior:
-- Uses the earlier of skippable-count or grace-duration to trigger alerts.
+- Uses grace duration as the miss window (falls back to interval when grace is unset/0).
 - Caches last-seen per subject in memory.
 - Sends a resolved notification when heartbeats resume.
 - Repeats alerts at the configured interval while a heartbeat is still missing.
@@ -89,8 +87,7 @@ func main() {
 		GeneratedAt: time.Now().UTC(),
 		Interval:    15 * time.Second,
 		Description: "API service",
-		// Optional thresholds:
-		// Skippable: func(i int) *int { return &i }(2),
+		// Optional threshold:
 		// GracePeriod: func(d time.Duration) *time.Duration { return &d }(45 * time.Second),
 	}
 	_ = pub.Publish(context.Background(), msg)
