@@ -2,10 +2,14 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +27,7 @@ type Config struct {
 	Debug       bool
 	Logger      *slog.Logger
 	RepeatEvery time.Duration
+	StatusAddr  string
 }
 
 type Monitor struct {
@@ -88,11 +93,24 @@ func (m *Monitor) Start(ctx context.Context) error {
 	ticker := time.NewTicker(m.cfg.PollEvery)
 	defer ticker.Stop()
 
+	var statusErrCh chan error
+	if m.cfg.StatusAddr != "" {
+		statusErrCh = make(chan error, 1)
+		go m.serveStatus(ctx, statusErrCh)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			m.logger.Info("monitor stopping")
 			return nil
+		case err, ok := <-statusErrCh:
+			if ok && err != nil {
+				return fmt.Errorf("status server: %w", err)
+			}
+			if !ok {
+				statusErrCh = nil
+			}
 		case <-ticker.C:
 			m.scan(ctx)
 		}
@@ -243,4 +261,111 @@ func (m *Monitor) subscribeSubject() string {
 		return ">"
 	}
 	return fmt.Sprintf("%s.>", m.cfg.Prefix)
+}
+
+type statusResponse struct {
+	ObservedAt time.Time      `json:"observed_at"`
+	Subjects   []subjectState `json:"subjects"`
+}
+
+type subjectState struct {
+	Subject       string    `json:"subject"`
+	Description   string    `json:"description"`
+	LastSeen      time.Time `json:"last_seen"`
+	Interval      string    `json:"interval"`
+	Grace         *string   `json:"grace,omitempty"`
+	AllowedWindow string    `json:"allowed_window"`
+	Missing       bool      `json:"missing"`
+	MissFor       string    `json:"miss_for,omitempty"`
+	MissCount     int       `json:"miss_count,omitempty"`
+	AlertActive   bool      `json:"alert_active"`
+}
+
+func (m *Monitor) serveStatus(ctx context.Context, errCh chan<- error) {
+	server := &http.Server{
+		Addr:    m.cfg.StatusAddr,
+		Handler: m.statusHandler(),
+		BaseContext: func(_ net.Listener) context.Context {
+			return ctx
+		},
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			m.logger.Warn("status server shutdown failed", "err", err)
+		}
+	}()
+
+	m.logger.Info("status server starting", "addr", m.cfg.StatusAddr)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		errCh <- err
+	}
+	close(errCh)
+}
+
+func (m *Monitor) statusHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observedAt := time.Now()
+		resp := statusResponse{
+			ObservedAt: observedAt,
+			Subjects:   m.snapshot(observedAt),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(resp); err != nil {
+			m.logger.Warn("status response encode failed", "err", err)
+			http.Error(w, "encode failed", http.StatusInternalServerError)
+		}
+	})
+}
+
+func (m *Monitor) snapshot(now time.Time) []subjectState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	subjects := make([]subjectState, 0, len(m.state))
+	for _, s := range m.state {
+		allowed := s.allowedWindow()
+		elapsed := now.Sub(s.lastSeen)
+		missing := elapsed > allowed
+
+		var missFor string
+		var missCount int
+		if missing {
+			missFor = elapsed.String()
+			if s.interval > 0 {
+				missCount = int(elapsed / s.interval)
+			}
+		}
+
+		subject := subjectState{
+			Subject:       s.subject,
+			Description:   s.description,
+			LastSeen:      s.lastSeen,
+			Interval:      s.interval.String(),
+			AllowedWindow: allowed.String(),
+			Missing:       missing,
+			MissFor:       missFor,
+			MissCount:     missCount,
+			AlertActive:   s.alertActive,
+		}
+		if s.grace != nil && *s.grace > 0 {
+			grace := (*s.grace).String()
+			subject.Grace = &grace
+		}
+
+		subjects = append(subjects, subject)
+	}
+
+	sort.Slice(subjects, func(i, j int) bool {
+		return subjects[i].Subject < subjects[j].Subject
+	})
+
+	return subjects
 }

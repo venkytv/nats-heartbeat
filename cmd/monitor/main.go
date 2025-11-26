@@ -23,6 +23,7 @@ func main() {
 		primeStream = flag.String("prime-stream", envDefault("PRIME_STREAM", ""), "Optional JetStream stream to prime cache from")
 		pollEvery   = flag.Duration("poll", envDuration("POLL_INTERVAL", time.Second), "How often to check for missed beats")
 		repeatEvery = flag.Duration("repeat-every", envDuration("REPEAT_EVERY", 12*time.Hour), "How often to repeat alerts while beats are missing")
+		statusAddr  = flag.String("status-addr", envDefault("STATUS_ADDR", "127.0.0.1:8080"), "Listen address for HTTP status (empty to disable)")
 		poUser      = flag.String("pushover-user", os.Getenv("PUSHOVER_USER"), "Pushover user key")
 		poToken     = flag.String("pushover-token", os.Getenv("PUSHOVER_TOKEN"), "Pushover app token")
 		debug       = flag.Bool("debug", envBool("DEBUG", false), "Enable debug logging")
@@ -55,6 +56,7 @@ func main() {
 		PrimeStream: *primeStream,
 		PollEvery:   *pollEvery,
 		RepeatEvery: *repeatEvery,
+		StatusAddr:  *statusAddr,
 		Debug:       *debug,
 		Logger:      logger,
 	}
