@@ -17,12 +17,14 @@ import (
 
 func main() {
 	var (
-		natsURL  = flag.String("nats-url", envDefault("NATS_URL", nats.DefaultURL), "NATS server URL")
-		subject  = flag.String("subject", envDefault("SUBJECT", ""), "Full heartbeat subject (required)")
-		interval = flag.Duration("interval", envDuration("INTERVAL", 15*time.Second), "Heartbeat interval")
-		grace    = flag.Duration("grace", envDuration("GRACE", 0), "Optional max duration to miss beats before alerting")
-		desc     = flag.String("description", envDefault("DESCRIPTION", ""), "Human-friendly description for alerts")
-		debug    = flag.Bool("debug", envBool("DEBUG", false), "Enable debug logging")
+		natsURL         = flag.String("nats-url", envDefault("NATS_URL", nats.DefaultURL), "NATS server URL")
+		subject         = flag.String("subject", envDefault("SUBJECT", ""), "Full heartbeat subject (required)")
+		interval        = flag.Duration("interval", envDuration("INTERVAL", 15*time.Second), "Heartbeat interval")
+		grace           = flag.Duration("grace", envDuration("GRACE", 0), "Optional max duration to miss beats before alerting")
+		desc            = flag.String("description", envDefault("DESCRIPTION", ""), "Human-friendly description for alerts")
+		flushTimeout    = flag.Duration("flush-timeout", envDuration("FLUSH_TIMEOUT", 2*time.Second), "How long to wait for NATS flush after publish")
+		exitOnFlushFail = flag.Bool("exit-on-flush-fail", envBool("EXIT_ON_FLUSH_FAIL", false), "Exit when flush fails instead of just logging")
+		debug           = flag.Bool("debug", envBool("DEBUG", false), "Enable debug logging")
 	)
 	flag.Parse()
 
@@ -68,6 +70,12 @@ func main() {
 
 		if err := pub.Publish(ctx, hb); err != nil {
 			logger.Error("publish heartbeat failed", "err", err, "subject", hb.Subject)
+		} else if err := flushWithTimeout(ctx, nc, *flushTimeout); err != nil {
+			logger.Warn("heartbeat flush failed", "err", err, "subject", hb.Subject, "timeout", *flushTimeout)
+			if *exitOnFlushFail {
+				logger.Error("exiting due to flush failure", "subject", hb.Subject)
+				return
+			}
 		} else {
 			logger.Debug("heartbeat published", "subject", hb.Subject, "interval", hb.Interval, "grace", hb.GracePeriod)
 		}
@@ -113,6 +121,16 @@ func connectWithRetry(ctx context.Context, logger *slog.Logger, url string) (*na
 			nats.MaxReconnects(-1), // never give up once connected
 			nats.ReconnectWait(2*time.Second),
 			nats.RetryOnFailedConnect(true), // keep trying initial connects with the same backoff policy
+			nats.ErrorHandler(func(_ *nats.Conn, sub *nats.Subscription, err error) {
+				if err == nil {
+					return
+				}
+				if sub != nil {
+					logger.Warn("nats async error", "err", err, "subject", sub.Subject)
+					return
+				}
+				logger.Warn("nats async error", "err", err)
+			}),
 			nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 				if err != nil {
 					logger.Warn("nats disconnected", "err", err)
@@ -123,7 +141,11 @@ func connectWithRetry(ctx context.Context, logger *slog.Logger, url string) (*na
 			nats.ReconnectHandler(func(_ *nats.Conn) {
 				logger.Info("nats reconnected")
 			}),
-			nats.ClosedHandler(func(_ *nats.Conn) {
+			nats.ClosedHandler(func(nc *nats.Conn) {
+				if nc != nil && nc.LastError() != nil {
+					logger.Error("nats connection closed; will restart if context allows", "err", nc.LastError())
+					return
+				}
 				logger.Error("nats connection closed; will restart if context allows")
 			}),
 		)
@@ -146,4 +168,13 @@ func connectWithRetry(ctx context.Context, logger *slog.Logger, url string) (*na
 			}
 		}
 	}
+}
+
+func flushWithTimeout(ctx context.Context, nc *nats.Conn, timeout time.Duration) error {
+	if nc == nil || timeout <= 0 {
+		return nil
+	}
+	flushCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return nc.FlushWithContext(flushCtx)
 }
