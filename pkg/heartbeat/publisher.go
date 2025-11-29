@@ -3,6 +3,7 @@ package heartbeat
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -14,6 +15,8 @@ type Publisher struct {
 	nc     *nats.Conn
 	prefix string
 }
+
+var hostname = os.Hostname
 
 func NewPublisher(nc *nats.Conn, prefix string) *Publisher {
 	return &Publisher{
@@ -27,6 +30,7 @@ func (p *Publisher) Publish(ctx context.Context, msg Message) error {
 	if msg.GeneratedAt.IsZero() {
 		msg.GeneratedAt = time.Now().UTC()
 	}
+	msg = applyHostDefault(msg)
 	if err := msg.Validate(); err != nil {
 		return err
 	}
@@ -47,6 +51,16 @@ func (p *Publisher) fullSubject(s string) string {
 		return s
 	}
 	return fmt.Sprintf("%s.%s", p.prefix, s)
+}
+
+func applyHostDefault(msg Message) Message {
+	if msg.Host != "" {
+		return msg
+	}
+	if host, err := hostname(); err == nil && host != "" {
+		msg.Host = host
+	}
+	return msg
 }
 
 // cloneHeaders extracts trace-like metadata from context if available.

@@ -9,6 +9,7 @@ import (
 type Event struct {
 	Subject     string
 	Description string
+	Host        string
 	LastSeen    time.Time
 	Interval    time.Duration
 	MissCount   int

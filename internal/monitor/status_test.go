@@ -15,12 +15,14 @@ func TestSnapshotReportsMissingAndHealthy(t *testing.T) {
 	m.state["svc-missing"] = &state{
 		subject:     "svc-missing",
 		description: "svc-missing",
+		host:        "host-a",
 		lastSeen:    now.Add(-3 * time.Second),
 		interval:    time.Second,
 	}
 	m.state["svc-healthy"] = &state{
 		subject:     "svc-healthy",
 		description: "svc-healthy",
+		host:        "host-b",
 		lastSeen:    now.Add(-500 * time.Millisecond),
 		interval:    time.Second,
 		grace:       &grace,
@@ -50,6 +52,9 @@ func TestSnapshotReportsMissingAndHealthy(t *testing.T) {
 	if missing.MissCount != 3 {
 		t.Fatalf("expected miss count 3, got %d", missing.MissCount)
 	}
+	if missing.Host != "host-a" {
+		t.Fatalf("expected host host-a, got %s", missing.Host)
+	}
 
 	if healthy.Missing {
 		t.Fatalf("expected svc-healthy to be healthy")
@@ -62,5 +67,8 @@ func TestSnapshotReportsMissingAndHealthy(t *testing.T) {
 	}
 	if healthy.AllowedWindow != grace.String() {
 		t.Fatalf("expected allowed window %s, got %s", grace, healthy.AllowedWindow)
+	}
+	if healthy.Host != "host-b" {
+		t.Fatalf("expected host host-b, got %s", healthy.Host)
 	}
 }

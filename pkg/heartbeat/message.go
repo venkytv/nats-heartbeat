@@ -13,6 +13,7 @@ type Message struct {
 	GeneratedAt time.Time      `json:"generated_at"`
 	Interval    time.Duration  `json:"interval"`               // expected heartbeat period
 	GracePeriod *time.Duration `json:"grace_period,omitempty"` // max time to miss beats
+	Host        string         `json:"host,omitempty"`         // origin host/container
 	Description string         `json:"description,omitempty"`
 }
 

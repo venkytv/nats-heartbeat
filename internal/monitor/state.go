@@ -9,6 +9,7 @@ import (
 type state struct {
 	subject     string
 	description string
+	host        string
 	lastSeen    time.Time
 	interval    time.Duration
 	grace       *time.Duration
@@ -21,6 +22,7 @@ func newState(msg heartbeat.Message) state {
 	return state{
 		subject:     msg.Subject,
 		description: descriptionOrSubject(msg),
+		host:        msg.Host,
 		lastSeen:    msg.GeneratedAt,
 		interval:    msg.Interval,
 		grace:       msg.GracePeriod,

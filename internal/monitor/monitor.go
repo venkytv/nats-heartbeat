@@ -138,6 +138,7 @@ func (m *Monitor) handleMessage(ctx context.Context, msg *nats.Msg) {
 	s.lastSeen = hb.GeneratedAt
 	s.interval = hb.Interval
 	s.grace = hb.GracePeriod
+	s.host = hb.Host
 	s.description = descriptionOrSubject(hb)
 	m.logger.Debug("heartbeat updated", "subject", hb.Subject, "interval", hb.Interval, "grace", hb.GracePeriod)
 
@@ -147,6 +148,7 @@ func (m *Monitor) handleMessage(ctx context.Context, msg *nats.Msg) {
 		go m.notifier.Resolved(ctx, notifier.Event{
 			Subject:     s.subject,
 			Description: s.description,
+			Host:        s.host,
 			LastSeen:    s.lastSeen,
 			Interval:    s.interval,
 		})
@@ -169,6 +171,7 @@ func (m *Monitor) scan(ctx context.Context) {
 				toResolve = append(toResolve, notifier.Event{
 					Subject:     s.subject,
 					Description: s.description,
+					Host:        s.host,
 					LastSeen:    s.lastSeen,
 					Interval:    s.interval,
 					MissFor:     elapsed,
@@ -187,6 +190,7 @@ func (m *Monitor) scan(ctx context.Context) {
 			toAlert = append(toAlert, notifier.Event{
 				Subject:     s.subject,
 				Description: s.description,
+				Host:        s.host,
 				LastSeen:    s.lastSeen,
 				Interval:    s.interval,
 				MissFor:     elapsed,
@@ -199,6 +203,7 @@ func (m *Monitor) scan(ctx context.Context) {
 			toAlert = append(toAlert, notifier.Event{
 				Subject:     s.subject,
 				Description: s.description,
+				Host:        s.host,
 				LastSeen:    s.lastSeen,
 				Interval:    s.interval,
 				MissFor:     elapsed,
@@ -271,6 +276,7 @@ type statusResponse struct {
 type subjectState struct {
 	Subject       string    `json:"subject"`
 	Description   string    `json:"description"`
+	Host          string    `json:"host,omitempty"`
 	LastSeen      time.Time `json:"last_seen"`
 	Interval      string    `json:"interval"`
 	Grace         *string   `json:"grace,omitempty"`
@@ -347,6 +353,7 @@ func (m *Monitor) snapshot(now time.Time) []subjectState {
 		subject := subjectState{
 			Subject:       s.subject,
 			Description:   s.description,
+			Host:          s.host,
 			LastSeen:      s.lastSeen,
 			Interval:      s.interval.String(),
 			AllowedWindow: allowed.String(),

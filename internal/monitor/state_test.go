@@ -30,3 +30,15 @@ func TestAllowedWindowDefaultsToInterval(t *testing.T) {
 		t.Fatalf("expected interval %s, got %s", time.Second, got)
 	}
 }
+
+func TestNewStateCapturesHost(t *testing.T) {
+	st := newState(heartbeat.Message{
+		Subject:     "svc",
+		GeneratedAt: time.Now(),
+		Interval:    time.Second,
+		Host:        "host-1",
+	})
+	if st.host != "host-1" {
+		t.Fatalf("expected host host-1, got %s", st.host)
+	}
+}

@@ -26,6 +26,8 @@ Flags (env mirrors in parentheses):
 - `-grace` (`GRACE`): duration allowed with no beats; omit/0 to fall back to interval.
 - `-description` (`DESCRIPTION`): human-friendly label (falls back to subject).
 
+Each heartbeat includes the originating host (defaults to the local hostname), interval, and optional grace/description metadata.
+
 ## Monitor (CLI)
 Watches a subject prefix, evaluates miss thresholds, and notifies when breached or resolved.
 
@@ -86,6 +88,7 @@ func main() {
 		Subject:     "heartbeat.service.api",
 		GeneratedAt: time.Now().UTC(),
 		Interval:    15 * time.Second,
+		Host:        "api-host-1", // optional; defaults to local hostname
 		Description: "API service",
 		// Optional threshold:
 		// GracePeriod: func(d time.Duration) *time.Duration { return &d }(45 * time.Second),
