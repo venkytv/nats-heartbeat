@@ -66,6 +66,29 @@ nats stream purge HEARTBEATS --subject heartbeat.retired-service --force
 
 Replace `HEARTBEATS` with your stream name and `heartbeat.retired-service` with the subject to clear.
 
+## Status (CLI)
+Query the monitor's status endpoint (default `http://127.0.0.1:8080/`) and highlight any firing alerts:
+
+```sh
+go run ./cmd/status -url http://127.0.0.1:8080/
+```
+
+Flags (env mirrors in parentheses):
+- `-url` (`STATUS_URL`): status endpoint URL.
+- `-timeout` (`STATUS_TIMEOUT`, default `3s`): HTTP request timeout.
+
+Example output:
+
+```
+Observed at: 2024-06-01T12:00:00Z
+
+STATUS  SUBJECT                DESCRIPTION        HOST      LAST SEEN                 DETAILS
+ALERT!  heartbeat.api          API service        host-a    2024-06-01T11:59:30Z      missed 30s (2 beats)
+OK      heartbeat.worker.queue Worker processor   host-b    2024-06-01T11:59:55Z      interval 10s, window 10s
+
+1 alert(s) firing across 2 subject(s)
+```
+
 ## Library Usage (publish heartbeats)
 Embed heartbeat publishing in your own Go binaries:
 
